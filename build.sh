@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 # rmm build script
 
 # This script is used to build the component(s) in this repo from
 # source, and can be called with various options to customize the
-# build as needed (see the help output for details)
+# build as needed (see the help output for details).
 
 # Abort script on first error
 set -e
@@ -16,31 +16,35 @@ ARGS=$*
 
 # NOTE: ensure all dir changes are relative to the location of this
 # script, and that this script resides in the repo dir!
-REPODIR=$(cd $(dirname $0); pwd)
+REPODIR=$(cd "$(dirname "$0")"; pwd)
 
-VALIDARGS="clean librmm rmm -v -g -n -s --ptds -h"
+VALIDARGS="clean librmm rmm -v -g -n -s --ptds -h tests benchmarks"
 HELP="$0 [clean] [librmm] [rmm] [-v] [-g] [-n] [-s] [--ptds] [--cmake-args=\"<args>\"] [-h]
-   clean  - remove all existing build artifacts and configuration (start over)
-   librmm - build and install the librmm C++ code
-   rmm    - build and install the rmm Python package
-   -v     - verbose build mode
-   -g     - build for debug
-   -n     - no install step
-   -s     - statically link against cudart
-   --ptds - enable per-thread default stream
-   --cmake-args=\\\"<args>\\\"   - pass arbitrary list of CMake configuration options (escape all quotes in argument)
-   -h     - print this text
+   clean                       - remove all existing build artifacts and configuration (start over)
+   librmm                      - build and install the librmm C++ code
+   rmm                         - build and install the rmm Python package
+   benchmarks                  - build benchmarks
+   tests                       - build tests
+   -v                          - verbose build mode
+   -g                          - build for debug
+   -n                          - no install step (does not affect Python)
+   -s                          - statically link against cudart
+   --ptds                      - enable per-thread default stream
+   --cmake-args=\\\"<args>\\\" - pass arbitrary list of CMake configuration options (escape all quotes in argument)
+   -h                          - print this text
 
    default action (no args) is to build and install 'librmm' and 'rmm' targets
 "
-LIBRMM_BUILD_DIR=${LIBRMM_BUILD_DIR:=${REPODIR}/build}
-RMM_BUILD_DIR=${REPODIR}/python/build
+LIBRMM_BUILD_DIR=${LIBRMM_BUILD_DIR:=${REPODIR}/cpp/build}
+RMM_BUILD_DIR="${REPODIR}/python/rmm/build"
 BUILD_DIRS="${LIBRMM_BUILD_DIR} ${RMM_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
 VERBOSE_FLAG=""
 BUILD_TYPE=Release
 INSTALL_TARGET=install
+BUILD_BENCHMARKS=OFF
+BUILD_TESTS=OFF
 CUDA_STATIC_RUNTIME=OFF
 PER_THREAD_DEFAULT_STREAM=OFF
 RAN_CMAKE=0
@@ -57,24 +61,25 @@ function hasArg {
 
 function cmakeArgs {
     # Check for multiple cmake args options
-    if [[ $(echo $ARGS | { grep -Eo "\-\-cmake\-args" || true; } | wc -l ) -gt 1 ]]; then
+    if [[ $(echo "$ARGS" | { grep -Eo "\-\-cmake\-args" || true; } | wc -l ) -gt 1 ]]; then
         echo "Multiple --cmake-args options were provided, please provide only one: ${ARGS}"
         exit 1
     fi
 
     # Check for cmake args option
-    if [[ -n $(echo $ARGS | { grep -E "\-\-cmake\-args" || true; } ) ]]; then
+    if [[ -n $(echo "$ARGS" | { grep -E "\-\-cmake\-args" || true; } ) ]]; then
         # There are possible weird edge cases that may cause this regex filter to output nothing and fail silently
         # the true pipe will catch any weird edge cases that may happen and will cause the program to fall back
         # on the invalid option error
-        CMAKE_ARGS=$(echo $ARGS | { grep -Eo "\-\-cmake\-args=\".+\"" || true; })
-        if [[ -n ${CMAKE_ARGS} ]]; then
-            # Remove the full  CMAKE_ARGS argument from list of args so that it passes validArgs function
-            ARGS=${ARGS//$CMAKE_ARGS/}
+        EXTRA_CMAKE_ARGS=$(echo "$ARGS" | { grep -Eo "\-\-cmake\-args=\".+\"" || true; })
+        if [[ -n ${EXTRA_CMAKE_ARGS} ]]; then
+            # Remove the full  EXTRA_CMAKE_ARGS argument from list of args so that it passes validArgs function
+            ARGS=${ARGS//$EXTRA_CMAKE_ARGS/}
             # Filter the full argument down to just the extra string that will be added to cmake call
-            CMAKE_ARGS=$(echo $CMAKE_ARGS | grep -Eo "\".+\"" | sed -e 's/^"//' -e 's/"$//')
+            EXTRA_CMAKE_ARGS=$(echo "$EXTRA_CMAKE_ARGS" | grep -Eo "\".+\"" | sed -e 's/^"//' -e 's/"$//')
         fi
     fi
+    read -ra EXTRA_CMAKE_ARGS <<< "$EXTRA_CMAKE_ARGS"
 }
 
 
@@ -84,23 +89,25 @@ function ensureCMakeRan {
     mkdir -p "${LIBRMM_BUILD_DIR}"
     if (( RAN_CMAKE == 0 )); then
         echo "Executing cmake for librmm..."
-        cmake -B "${LIBRMM_BUILD_DIR}" -S . \
+        cmake -S "${REPODIR}"/cpp -B "${LIBRMM_BUILD_DIR}" \
               -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
               -DCUDA_STATIC_RUNTIME="${CUDA_STATIC_RUNTIME}" \
               -DPER_THREAD_DEFAULT_STREAM="${PER_THREAD_DEFAULT_STREAM}" \
               -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-              ${CMAKE_ARGS}
+              -DBUILD_TESTS=${BUILD_TESTS} \
+              -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
+              "${EXTRA_CMAKE_ARGS[@]}"
         RAN_CMAKE=1
     fi
 }
 
-if hasArg -h; then
+if hasArg -h || hasArg --help; then
     echo "${HELP}"
     exit 0
 fi
 
 # Check for valid usage
-if (( ${NUMARGS} != 0 )); then
+if (( NUMARGS != 0 )); then
     # Check for cmake args
     cmakeArgs
     for a in ${ARGS}; do
@@ -122,6 +129,12 @@ fi
 if hasArg -n; then
     INSTALL_TARGET=""
 fi
+if hasArg benchmarks; then
+    BUILD_BENCHMARKS=ON
+fi
+if hasArg tests; then
+    BUILD_TESTS=ON
+fi
 if hasArg -s; then
     CUDA_STATIC_RUNTIME=ON
 fi
@@ -139,7 +152,7 @@ if hasArg clean; then
         if [ -d "${bd}" ]; then
             find "${bd}" -mindepth 1 -delete
             rmdir "${bd}" || true
-	fi
+        fi
     done
 fi
 
@@ -148,7 +161,7 @@ fi
 if (( NUMARGS == 0 )) || hasArg librmm; then
     ensureCMakeRan
     echo "building librmm..."
-    cmake --build "${LIBRMM_BUILD_DIR}" -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
+    cmake --build "${LIBRMM_BUILD_DIR}" -j"${PARALLEL_LEVEL}" ${VERBOSE_FLAG}
     if [[ ${INSTALL_TARGET} != "" ]]; then
         echo "installing librmm..."
         cmake --build "${LIBRMM_BUILD_DIR}" --target install -v ${VERBOSE_FLAG}
@@ -157,16 +170,10 @@ fi
 
 # Build and install the rmm Python package
 if (( NUMARGS == 0 )) || hasArg rmm; then
-    cd "${REPODIR}/python"
-    export INSTALL_PREFIX
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        echo "building rmm..."
-        python setup.py build_ext --inplace
-        echo "installing rmm..."
-        python setup.py install --single-version-externally-managed --record=record.txt
-    else
-        echo "building rmm..."
-        python setup.py build_ext --inplace
-    fi
-
+    echo "building and installing rmm..."
+    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};$(IFS=';'; echo "${EXTRA_CMAKE_ARGS[*]}")" python -m pip install \
+        --no-build-isolation \
+        --no-deps \
+        --config-settings rapidsai.disable-cuda=true \
+        "${REPODIR}"/python/rmm
 fi

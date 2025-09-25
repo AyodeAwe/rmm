@@ -1,0 +1,357 @@
+# Dependency list for https://github.com/rapidsai/dependency-file-generator
+files:
+  all:
+    output: conda
+    matrix:
+      cuda: ["12.9", "13.0"]
+      arch: [x86_64, aarch64]
+    includes:
+      - build
+      - cython_build
+      - checks
+      - cuda_version
+      - depends_on_rapids_logger
+      - develop
+      - docs
+      - py_version
+      - rapids_build_skbuild
+      - run
+      - test_python
+  test_python:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_python
+      - depends_on_librmm
+      - depends_on_rmm
+  test_cpp:
+    output: none
+    includes:
+      - cuda_version
+      - test_cpp
+      - depends_on_librmm
+      - depends_on_librmm_tests
+      - depends_on_librmm_example
+  checks:
+    output: none
+    includes:
+      - checks
+      - py_version
+  docs:
+    output: none
+    includes:
+      - cuda_version
+      - docs
+      - py_version
+      - depends_on_rmm
+      - depends_on_librmm
+  py_cpp_build:
+    output: pyproject
+    pyproject_dir: python/librmm
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_skbuild
+  py_cpp_rapids_build:
+    output: pyproject
+    pyproject_dir: python/librmm
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
+      - build
+      - depends_on_rapids_logger
+  py_cpp_run:
+    output: pyproject
+    pyproject_dir: python/librmm
+    extras:
+      table: project
+    includes:
+      - depends_on_rapids_logger
+  py_build:
+    output: pyproject
+    pyproject_dir: python/rmm
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_skbuild
+  py_rapids_build:
+    output: pyproject
+    pyproject_dir: python/rmm
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
+      - build
+      - cython_build
+      - depends_on_librmm
+  py_run:
+    output: pyproject
+    pyproject_dir: python/rmm
+    extras:
+      table: project
+    includes:
+      - run
+      - depends_on_librmm
+  py_optional_test:
+    output: pyproject
+    pyproject_dir: python/rmm
+    extras:
+      table: project.optional-dependencies
+      key: test
+    includes:
+      - test_python
+channels:
+  - rapidsai
+  - rapidsai-nightly
+  - conda-forge
+dependencies:
+  rapids_build_skbuild:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - rapids-build-backend>=0.4.0,<0.5.0.dev0
+      - output_types: conda
+        packages:
+          - scikit-build-core >=0.10.0
+      - output_types: [requirements, pyproject]
+        packages:
+          - scikit-build-core[pyproject]>=0.10.0
+  build:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - &cmake_ver cmake>=3.30.4
+          - ninja
+      - output_types: conda
+        packages:
+          - c-compiler
+          - cxx-compiler
+          - cuda-nvcc
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              arch: x86_64
+            packages:
+              - gcc_linux-64=14.*
+              - sysroot_linux-64==2.28
+          - matrix:
+              arch: aarch64
+            packages:
+              - gcc_linux-aarch64=14.*
+              - sysroot_linux-aarch64==2.28
+  cython_build:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - cython>=3.0.0
+    specific:
+      - output_types: [conda, requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - &cuda_python12 cuda-python>=12.9.2,<13.0a0
+          - matrix: # All CUDA 13 versions
+            packages:
+              - &cuda_python13 cuda-python>=13.0.1,<14.0a0
+  depends_on_librmm:
+    common:
+      - output_types: conda
+        packages:
+          - &librmm_unsuffixed librmm==25.10.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for librmm-cu{12,13}.
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - librmm-cu12==25.10.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - librmm-cu13==25.10.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *librmm_unsuffixed
+  depends_on_rmm:
+    common:
+      - output_types: conda
+        packages:
+          - rmm==25.10.*,>=0.0.0a0
+  depends_on_librmm_tests:
+    common:
+      - output_types: conda
+        packages:
+          - librmm-tests==25.10.*,>=0.0.0a0
+  depends_on_librmm_example:
+    common:
+      - output_types: conda
+        packages:
+          - librmm-example==25.10.*,>=0.0.0a0
+  checks:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - pre-commit
+          # pre-commit requires identify minimum version 1.0, but clang-format
+          # requires textproto support and that was added in 2.5.20, so we need
+          # to call out the minimum version needed for our plugins
+          - identify>=2.5.20
+      - output_types: conda
+        packages:
+          - &doxygen doxygen=1.9.1
+  cuda_version:
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-version=12.0
+          - matrix:
+              cuda: "12.2"
+            packages:
+              - cuda-version=12.2
+          - matrix:
+              cuda: "12.5"
+            packages:
+              - cuda-version=12.5
+          - matrix:
+              cuda: "12.8"
+            packages:
+              - cuda-version=12.8
+          - matrix:
+              cuda: "12.9"
+            packages:
+              - cuda-version=12.9
+          - matrix:
+              cuda: "13.0"
+            packages:
+              - cuda-version=13.0
+  develop:
+    common:
+      - output_types: conda
+        packages:
+          - clang==20.1.4
+          - clang-tools==20.1.4
+          - gcovr>=5.0
+  docs:
+    common:
+      - output_types: conda
+        packages:
+          - breathe>=4.35.0
+          - *doxygen
+          - graphviz
+          - ipython
+          - make
+          - nbsphinx
+          - &numba numba>=0.60.0,<0.62.0a0
+          - &numba_cuda numba-cuda>=0.19.1,<0.20.0a0
+          - numpydoc
+          - sphinx
+          - sphinx_rtd_theme
+          - sphinx-copybutton
+          - sphinx-markdown-tables
+  py_version:
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              py: "3.10"
+            packages:
+              - python=3.10
+          - matrix:
+              py: "3.11"
+            packages:
+              - python=3.11
+          - matrix:
+              py: "3.12"
+            packages:
+              - python=3.12
+          - matrix:
+              py: "3.13"
+            packages:
+              - python=3.13
+          - matrix:
+            packages:
+              - python>=3.10,<3.14
+  run:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - numpy>=1.23,<3.0a0
+    specific:
+      - output_types: [conda, requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - *cuda_python12
+          - matrix: # All CUDA 13 versions
+            packages:
+              - *cuda_python13
+  test_cpp:
+    common:
+      - output_types: conda
+        packages:
+          - *cmake_ver
+  test_python:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - pytest
+          - pytest-cov
+    specific:
+      - output_types: [conda, requirements, pyproject]
+        matrices:
+          - matrix:
+              dependencies: "oldest"
+            packages:
+              - numba==0.60.0
+              - numpy==1.23.*
+          - matrix:
+            packages:
+              - *numba
+      - output_types: [conda]
+        matrices:
+          - matrix:
+              dependencies: "oldest"
+            packages:
+              - numba-cuda==0.19.1
+          - matrix:
+            packages:
+              - *numba_cuda
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              dependencies: "oldest"
+            packages:
+              - numba-cuda==0.19.1
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - &numba_cuda_cu12 numba-cuda[cu12]>=0.19.1,<0.20.0a0
+          - matrix: # All CUDA 13 versions
+            packages:
+              - &numba_cuda_cu13 numba-cuda[cu13]>=0.19.1,<0.20.0a0
+
+  depends_on_rapids_logger:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - rapids-logger==0.1.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple

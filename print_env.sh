@@ -1,38 +1,39 @@
 #!/usr/bin/env bash
+# Copyright (c) 2025, NVIDIA CORPORATION.
 # Reports relevant environment information useful for diagnosing and
 # debugging RMM issues.
-# Usage: 
+# Usage:
 # "./print_env.sh" - prints to stdout
 # "./print_env.sh > env.txt" - prints to file "env.txt"
 
 echo "**git***"
 git log --decorate -n 1
-echo 
+echo
 
 echo "***OS Information***"
 cat /etc/*-release
 uname -a
-echo 
+echo
 
 echo "***GPU Information***"
 nvidia-smi
-echo 
+echo
 
 echo "***CPU***"
 lscpu
 echo
 
 echo "***CMake***"
-which cmake && cmake --version 
-echo 
+which cmake && cmake --version
+echo
 
 echo "***g++***"
-which g++ && g++ --version 
-echo 
+which g++ && g++ --version
+echo
 
 echo "***nvcc***"
-which nvcc && nvcc --version 
-echo 
+which nvcc && nvcc --version
+echo
 
 echo "***Python***"
 which python && python --version
@@ -40,24 +41,24 @@ echo
 
 echo "***Environment Variables***"
 
-printf '%-32s: %s\n' PATH $PATH
+printf '%-32s: %s\n' PATH "$PATH"
 
-printf '%-32s: %s\n' LD_LIBRARY_PATH $LD_LIBRARY_PATH
+printf '%-32s: %s\n' LD_LIBRARY_PATH "$LD_LIBRARY_PATH"
 
-printf '%-32s: %s\n' NUMBAPRO_NVVM $NUMBAPRO_NVVM
+printf '%-32s: %s\n' NUMBAPRO_NVVM "$NUMBAPRO_NVVM"
 
-printf '%-32s: %s\n' NUMBAPRO_LIBDEVICE $NUMBAPRO_LIBDEVICE
+printf '%-32s: %s\n' NUMBAPRO_LIBDEVICE "$NUMBAPRO_LIBDEVICE"
 
-printf '%-32s: %s\n' CONDA_PREFIX $CONDA_PREFIX
+printf '%-32s: %s\n' CONDA_PREFIX "$CONDA_PREFIX"
 
-printf '%-32s: %s\n' PYTHON_PATH $PYTHON_PATH
+printf '%-32s: %s\n' PYTHON_PATH "$PYTHON_PATH"
 
 echo
 
 # Print conda packages if conda exists
 if type "conda" > /dev/null; then
 echo '***conda packages***'
-which conda && conda list 
+which conda && conda list
 echo
 # Print pip packages if pip exists
 elif type "pip" > /dev/null; then
